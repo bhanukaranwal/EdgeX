@@ -1,17 +1,22 @@
 """
 base_strategy.py
-Abstract base class for all trading strategies.
-Defines standard interfaces for:
-    - signal generation
-    - trade execution
-    - lifecycle management
-    - reporting
+Abstract base class for trading strategies.
+Defines interfaces and lifecycle hooks for robust, extensible strategy development.
 """
 
 from abc import ABC, abstractmethod
+from typing import Any, Dict, List, Optional
 
 class BaseStrategy(ABC):
-    def __init__(self, name, params, broker, data_fetcher, risk_manager=None, logger=None):
+    def __init__(
+        self,
+        name: str,
+        params: Dict[str, Any],
+        broker: Any,
+        data_fetcher: Any,
+        risk_manager: Optional[Any] = None,
+        logger: Optional[Any] = None,
+    ):
         self.name = name
         self.params = params
         self.broker = broker
@@ -20,31 +25,23 @@ class BaseStrategy(ABC):
         self.logger = logger
 
     @abstractmethod
-    def initialize(self):
-        """Setup strategy state, validate params, preload data, etc."""
+    def initialize(self) -> None:
         pass
 
     @abstractmethod
-    def generate_signals(self, market_data):
-        """
-        Generate trading signals based on market data.
-        Args:
-            market_data (DataFrame/dict): Latest fetched data
-        Returns:
-            list: Each item is {symbol, action, size, price, reason}
-        """
+    def generate_signals(self, market_data: Any) -> List[Dict[str, Any]]:
         pass
 
     @abstractmethod
-    def execute_trades(self, signals):
-        """Place/cancel/modify orders as per given signals."""
+    def execute_trades(self, signals: List[Dict[str, Any]]) -> None:
         pass
 
     @abstractmethod
-    def manage_positions(self):
-        """Handle open positions, apply stop loss, exit logic etc."""
+    def manage_positions(self) -> None:
         pass
 
-    def report(self):
-        """Optional reporting interface."""
-        return {"strategy": self.name, "params": self.params}
+    def report(self) -> Dict[str, Any]:
+        return {
+            "strategy": self.name,
+            "params": self.params
+        }
