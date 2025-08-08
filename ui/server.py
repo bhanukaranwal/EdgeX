@@ -75,3 +75,40 @@ async def ws_live_quotes(websocket: WebSocket):
         ltp = {"symbol": "NIFTY", "price": 23450.10, "timestamp": "2025-08-09T11:25:34"}
         await websocket.send_json(ltp)
         await asyncio.sleep(1)
+        import os
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi import Query
+from edgeX.analytics.report_pipeline import ReportPipeline
+import pandas as pd
+
+reporter = ReportPipeline(logger=logger)
+
+@app.get("/analytics/sharpe_by_month.png")
+def serve_sharpe_by_month():
+    path = os.path.join(reporter.base_dir, "sharpe_by_month.png")
+    # Assuming latest trades loaded from file
+    trades = pd.read_csv(os.path.join(reporter.base_dir, "trade_log.csv"))
+    reporter.plot_sharpe_by_month(trades)
+    return FileResponse(path)
+
+@app.get("/analytics/win_loss_ratio.png")
+def serve_win_loss_ratio():
+    path = os.path.join(reporter.base_dir, "win_loss_ratio.png")
+    trades = pd.read_csv(os.path.join(reporter.base_dir, "trade_log.csv"))
+    reporter.plot_win_loss_ratio_by_symbol(trades)
+    return FileResponse(path)
+
+@app.get("/download/trades.xlsx")
+def download_trades_excel():
+    path = os.path.join(reporter.base_dir, "trade_log.xlsx")
+    trades = pd.read_csv(os.path.join(reporter.base_dir, "trade_log.csv"))
+    reporter.export_trade_log_excel(trades)
+    return FileResponse(path, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", filename="trade_log.xlsx")
+
+@app.get("/download/trades.json")
+def download_trades_json():
+    path = os.path.join(reporter.base_dir, "trade_log.json")
+    trades = pd.read_csv(os.path.join(reporter.base_dir, "trade_log.csv"))
+    reporter.export_trade_log_json(trades)
+    return FileResponse(path, media_type="application/json", filename="trade_log.json")
+
