@@ -1,21 +1,25 @@
 """
 risk_policies.py
-Basic risk manager: checks position limits, max drawdown, etc.
+Comprehensive strategy risk scanner and filter.
 """
 
 class BasicRiskManager:
-    def __init__(self, risk_config, logger=None):
+    def __init__(self, risk_config, position_limits=None, logger=None):
         self.risk_config = risk_config
+        self.position_limits = position_limits or {"max_per_trade": 10, "max_total": 50}
         self.logger = logger
 
-    def check_signals(self, signals):
-        # Example implementation: You can add more rigorous rules
-        max_position = self.risk_config.get("position_limit", 10)
+    def check_signals(self, signals, current_exposure=0):
         filtered = []
         for sig in signals:
-            if sig.get("size", 0) <= max_position:
-                filtered.append(sig)
-            else:
+            size = sig.get("size", 0)
+            if size > self.position_limits["max_per_trade"]:
                 if self.logger:
-                    self.logger.warning(f"Signal {sig} exceeds position limit.")
+                    self.logger.warning(f"Signal {sig} exceeds max per trade. Skipped.")
+                continue
+            if size + current_exposure > self.position_limits["max_total"]:
+                if self.logger:
+                    self.logger.error(f"Signal {sig}: total position exceeds max. Skipped.")
+                continue
+            filtered.append(sig)
         return filtered
