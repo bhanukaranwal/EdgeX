@@ -1,25 +1,18 @@
-bot:
-  start_time: "09:00"
-  end_time: "15:30"
-  capital: 1000000
-  strategy: "supertrend_adx"
-  environment: "live"
-risk:
-  max_drawdown: 0.2
-  position_limit: 10
-  stop_loss_type: "trailing"
-broker:
-  type: "zerodha"
-  config: "zerodha.yaml"
-ui:
-  enabled: true
-  port: 8000
-alerting:
-  email: true
-  sms: false
-  push: true
-logging:
-  level: "INFO"
-backtesting:
-  enabled: false
-  config: "backtest.yaml"
+strategies:
+  - name: "SupertrendADX"
+    params:
+      underlying_symbol: "NSE:NIFTY 50"
+      adx_threshold: 25
+      lot_size: 50
+  - name: "MomentumBreakout"
+    params:
+      underlying_symbol: "NSE:NIFTY 50"
+      short_ma_period: 10
+      long_ma_period: 30
+      lot_size: 50
+  - name: "BollingerReversion"
+    params:
+      underlying_symbol: "NSE:NIFTY 50"
+      window: 20
+      num_std: 2
+      lot_size: 50
