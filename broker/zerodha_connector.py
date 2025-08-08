@@ -1,149 +1,103 @@
 """
 zerodha_connector.py
-Zerodha PyKiteConnect API wrapper:
-- Session & access token management
-- Order placement, status, and account access
+Extensible broker interface for Zerodha KiteConnect.
 """
 
 import os
 import logging
-from kiteconnect import KiteConnect, KiteTicker
+from typing import Optional, Dict, Any
+from kiteconnect import KiteConnect
 from edgeX.utils.config_loader import load_config
 from edgeX.utils.logger import get_logger
 
 class ZerodhaConnector:
-    """
-    Handles Zerodha KiteConnect broker integration, login, and order workflow.
-    """
-
-    def __init__(self, broker_config_path='config/zerodha.yaml'):
-        self.logger = get_logger(self.__class__.__name__)
+    def __init__(self, broker_config_path: str = 'config/zerodha.yaml'):
+        self.logger = get_logger("ZerodhaConnector")
         self.config = load_config(broker_config_path)
         self.api_key = self.config.get('api_key')
-        self.api_secret = self.config.get('api_secret')
-        self.access_token = self.config.get('access_token')  # to be refreshed daily!
-        self.request_token = self.config.get('request_token')  # only needed for login
-
+        self.api_secret = self.config.get('api_secret', '')
+        self.access_token = self.config.get('access_token', '')
+        self.request_token = self.config.get('request_token', '')
         self.kite = KiteConnect(api_key=self.api_key)
-        self.session = None
-
         if self.access_token:
             self.kite.set_access_token(self.access_token)
-            self.logger.info("Access token loaded from config.")
+            self.logger.info("Access token loaded.")
         else:
-            self.logger.warning("No access token found, login required!")
+            self.logger.warning("Access token missing; login required.")
 
-    def login(self):
-        """
-        Authenticate and get new access token.
-        User must get request_token manually (via Zerodha login flow).
-        """
+    def login(self) -> bool:
         if not self.request_token:
-            self.logger.error("Request token missing! Please complete Zerodha login flow to get it.")
+            self.logger.error("Request token missing. Complete Zerodha login flow.")
             return False
-
         try:
             data = self.kite.generate_session(self.request_token, api_secret=self.api_secret)
             self.access_token = data["access_token"]
             self.kite.set_access_token(self.access_token)
-            self.logger.info(f"Login successful, new access token acquired: {self.access_token}")
-            # Optionally, update config
             self.config['access_token'] = self.access_token
-            # Persist new token
-            self._store_token(self.access_token)
+            with open('config/zerodha.yaml', 'w') as f:
+                import yaml
+                yaml.safe_dump(self.config, f)
+            self.logger.info("Session login successful; access token stored.")
             return True
         except Exception as e:
-            self.logger.error(f"Login error: {e}", exc_info=True)
+            self.logger.error(f"Zerodha login error: {e}", exc_info=True)
             return False
 
-    def _store_token(self, token):
-        """
-        Persist access token to config file.
-        """
-        self.config['access_token'] = token
-        with open('config/zerodha.yaml', 'w') as f:
-            import yaml
-            yaml.safe_dump(self.config, f)
-        self.logger.info("Access token updated in config/zerodha.yaml.")
-
-    def get_profile(self):
-        """
-        Fetch Zerodha account profile info.
-        """
+    def place_order(
+        self,
+        exchange: str,
+        tradingsymbol: str,
+        txn_type: str,
+        quantity: int,
+        order_type: str = "MARKET",
+        product: str = "MIS",
+        variety: str = "regular",
+        price: Optional[float] = None,
+        stoploss: Optional[float] = None
+    ) -> Dict[str, Any]:
         try:
-            profile = self.kite.profile()
-            self.logger.info(f"Retrieved user profile: {profile.get('user_name', 'unknown')}")
-            return profile
-        except Exception as e:
-            self.logger.error(f"Could not fetch profile: {e}", exc_info=True)
-            return None
-
-    def get_orders(self):
-        """
-        Retrieve all orders placed today.
-        """
-        try:
-            orders = self.kite.orders()
-            self.logger.info(f"Fetched {len(orders)} orders.")
-            return orders
-        except Exception as e:
-            self.logger.error(f"Order fetch error: {e}", exc_info=True)
-            return []
-
-    def place_order(self, exchange, tradingsymbol, txn_type, quantity, order_type="MARKET", product="MIS", variety="regular", price=None, stoploss=None):
-        """
-        Place new market/limit order
-        Args:
-            exchange (str): "NSE"
-            tradingsymbol (str): e.g., "NIFTY24AUG17500CE"
-            txn_type (str): "BUY" or "SELL"
-            quantity (int)
-            order_type (str): "MARKET", "LIMIT", etc.
-            product (str): "MIS" (intraday), "NRML" (overnight)
-            variety (str): "regular"
-            price (float): Required for limit order
-            stoploss (float): for SL order (optional)
-        Returns:
-            dict: Order info
-        """
-        try:
-            order = self.kite.place_order(
+            params = dict(
                 exchange=exchange,
                 tradingsymbol=tradingsymbol,
                 transaction_type=txn_type,
                 quantity=quantity,
-                variety=variety,
+                price=price or 0,
                 order_type=order_type,
                 product=product,
-                price=price or 0,
-                stoploss=stoploss or 0
+                variety=variety
             )
-            self.logger.info(f"Order placed: {order}")
-            return order
+            if stoploss:
+                params["stoploss"] = stoploss
+            order_resp = self.kite.place_order(**params)
+            self.logger.info(f"Order placed: {order_resp}")
+            return order_resp
         except Exception as e:
-            self.logger.error(f"Order placement error: {e}", exc_info=True)
+            self.logger.error(f"Order placement failed: {e}", exc_info=True)
             return {}
 
-    def get_positions(self):
-        """
-        Fetch all open positions.
-        """
+    def get_positions(self) -> Dict[str, Any]:
         try:
             positions = self.kite.positions()
             self.logger.info("Positions fetched.")
             return positions
         except Exception as e:
-            self.logger.error(f"Position fetch error: {e}", exc_info=True)
+            self.logger.error(f"Get positions failed: {e}", exc_info=True)
             return {}
 
-    def cancel_order(self, order_id, variety="regular"):
+    def get_orders(self) -> Any:
+        try:
+            orders = self.kite.orders()
+            self.logger.info(f"Retrieved {len(orders)} orders today.")
+            return orders
+        except Exception as e:
+            self.logger.error(f"Orders fetch error: {e}", exc_info=True)
+            return []
+
+    def cancel_order(self, order_id: str, variety: str = "regular") -> Dict[str, Any]:
         try:
             status = self.kite.cancel_order(variety=variety, order_id=order_id)
             self.logger.info(f"Order cancelled: {order_id}")
             return status
         except Exception as e:
-            self.logger.error(f"Order cancel error: {e}", exc_info=True)
+            self.logger.error(f"Cancel order failed: {e}", exc_info=True)
             return {}
-
-    # Additional methods for SR, order modify, etc. can be added here.
-
